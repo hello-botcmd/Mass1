@@ -236,8 +236,6 @@ async def cancel(update: Update, context):
     await update.message.reply_text("❌ Operation cancelled.")
     context.user_data.clear()
     return ConversationHandler.END
-
-
 def get_reactions_handler():
     return ConversationHandler(
         entry_points=[
@@ -257,5 +255,6 @@ def get_reactions_handler():
         fallbacks=[
             CommandHandler("cancel", cancel),
         ],
-        per_message=True,
-        )
+        # per_message removed — defaults to per_user=True
+    )
+
