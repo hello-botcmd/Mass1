@@ -199,6 +199,6 @@ def get_add_account_handler():
         },
         fallbacks=[
             CommandHandler("cancel", cancel),
-        ],
-        per_message=True,
+        ]
+    
     )
