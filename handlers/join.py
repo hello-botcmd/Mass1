@@ -337,6 +337,14 @@ async def stop_join():
     global _join_stop
     _join_stop.set()
 
+# Add this at the bottom of handlers/join.py, before get_join_handler():
+
+async def cancel(update: Update, context):
+    """Cancel any ongoing conversation."""
+    await update.message.reply_text("❌ Operation cancelled.")
+    context.user_data.clear()
+    return ConversationHandler.END
+
 
 def get_join_handler():
     return ConversationHandler(
@@ -357,5 +365,5 @@ def get_join_handler():
         fallbacks=[
             CommandHandler("cancel", cancel),
         ],
-        per_message=True,
-  )
+        # per_message removed — defaults to per_user=True
+    )
