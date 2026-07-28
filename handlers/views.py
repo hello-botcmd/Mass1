@@ -219,4 +219,21 @@ async def cancel(update: Update, context):
     context.user_data.clear()
     return ConversationHandler.END
 
-
+def get_views_handler():
+    return ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(views_start, pattern="^views$"),
+        ],
+        states={
+            VIEWS_LINKS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, views_receive_links),
+            ],
+            VIEWS_COUNT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, views_receive_count),
+            ],
+        },
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+        ],
+        # per_message removed — defaults to per_user=True
+    )
