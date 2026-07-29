@@ -158,27 +158,39 @@ async def handle_phone_number(update: Update, context):
         client, code_hash = await client_manager.start_phone_login(phone)
         context.user_data["login_phone"] = phone
         await status_msg.edit_text(
-            f"✅ OTP sent to `{phone}`\n\nPlease send the OTP code you received.\n\n"
+            f"✅ OTP sent to `{phone}`\n\n"
+            f"📱 Check your **Telegram app** (the code arrives in Telegram, not SMS)\n\n"
+            f"Please send the OTP code you received.\n"
             f"Send /cancel to abort.",
             parse_mode="Markdown"
         )
         return OTP_CODE
     except ValueError as e:
         await status_msg.edit_text(
-            f"❌ {str(e)}\n\nTry a different phone or use session string.\n\nSend /cancel to abort.",
+            f"❌ {str(e)}\n\n"
+            f"Try a different phone or use session string instead.\n\n"
+            f"Send /cancel to abort.",
             parse_mode="Markdown"
         )
-        from client_manager import client_manager as cm
-        await cm.cancel_pending_login(phone)
+        await client_manager.cancel_pending_login(phone)
         return SINGLE_SESSION
     except Exception as e:
+        error_text = str(e)
+        # Truncate very long errors
+        if len(error_text) > 250:
+            error_text = error_text[:250] + "..."
         await status_msg.edit_text(
-            f"❌ Failed to send OTP: {str(e)}\n\nSend /cancel to abort.",
+            f"❌ Failed to send OTP.\n"
+            f"Error: `{error_text}`\n\n"
+            f"Possible causes:\n"
+            f"• Check API_ID and API_HASH in config.py\n"
+            f"• Phone number format should be +1234567890\n"
+            f"• The phone might not have a Telegram account\n\n"
+            f"Try again or send /cancel to abort.",
             parse_mode="Markdown"
         )
-        from client_manager import client_manager as cm
-        await cm.cancel_pending_login(phone)
-        return SINGLE_SESSION
+        await client_manager.cancel_pending_login(phone)
+        return PHONE_NUMBER  
 
 
 async def handle_otp(update: Update, context):
