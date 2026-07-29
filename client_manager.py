@@ -125,6 +125,91 @@ class ClientManager:
         except Exception as e:
             logger.error(f"Failed to set {phone} online: {e}")
 
+    # ───────────── Phone Login Flow ─────────────
+
+    async def start_phone_login(self, phone: str) -> tuple:
+        """
+        Create a fresh client and send the code request.
+        Returns (client, phone_code_hash) on success, raises on error.
+        """
+        session = StringSession()  # Empty session string
+        client = TelegramClient(session, API_ID, API_HASH)
+        await client.connect()
+        
+        # Ensure we're not authorized yet
+        if await client.is_user_authorized():
+            await client.disconnect()
+            raise ValueError(f"Phone {phone} is already authorized. Use session string instead.")
+        
+        result = await client.send_code_request(phone)
+        # Store in a temporary dict so we can retrieve it later
+        self._pending_logins[phone] = {
+            "client": client,
+            "phone_code_hash": result.phone_code_hash,
+        }
+        return client, result.phone_code_hash
+
+    async def submit_otp(self, phone: str, code: str) -> tuple:
+        """
+        Submit OTP code for phone login.
+        Returns (success: bool, session_string: str or None, error: str or None).
+        If 2FA is required, returns (False, None, "2FA_REQUIRED") — call submit_2fa next.
+        """
+        from telethon.errors import SessionPasswordNeededError
+        
+        pending = self._pending_logins.get(phone)
+        if not pending:
+            return False, None, "No pending login for this phone. Start again."
+        
+        client = pending["client"]
+        phone_code_hash = pending["phone_code_hash"]
+        
+        try:
+            await client.sign_in(phone, code, phone_code_hash=phone_code_hash)
+            # Success! No 2FA needed
+            session_string = client.session.save()
+            # Clean up pending
+            self.clients[phone] = client
+            self._pending_logins.pop(phone, None)
+            return True, session_string, None
+        except SessionPasswordNeededError:
+            # 2FA is needed — keep client, mark it
+            pending["awaiting_2fa"] = True
+            return False, None, "2FA_REQUIRED"
+        except Exception as e:
+            await client.disconnect()
+            self._pending_logins.pop(phone, None)
+            return False, None, str(e)
+
+    async def submit_2fa(self, phone: str, password: str) -> tuple:
+        """
+        Submit 2FA password for phone login.
+        Returns (success: bool, session_string: str or None, error: str or None).
+        """
+        pending = self._pending_logins.get(phone)
+        if not pending or not pending.get("awaiting_2fa"):
+            return False, None, "No pending 2FA for this phone. Start again."
+        
+        client = pending["client"]
+        
+        try:
+            await client.sign_in(password=password)
+            session_string = client.session.save()
+            self.clients[phone] = client
+            self._pending_logins.pop(phone, None)
+            return True, session_string, None
+        except Exception as e:
+            return False, None, str(e)
+
+    async def cancel_pending_login(self, phone: str):
+        """Cancel an in-progress phone login and disconnect the client."""
+        pending = self._pending_logins.pop(phone, None)
+        if pending:
+            try:
+                await pending["client"].disconnect()
+            except Exception:
+                pass
+                
     async def validate_session(self, session_string: str) -> tuple:
         """
         Validate a session string by connecting and checking auth.
